@@ -41,4 +41,8 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: '--max-turns 12'
+          # 이슈 작업은 기본적으로 브랜치 push와 PR 링크까지만 하므로, PR 생성 명령 하나만 추가로 허용
+          claude_args: |
+            --max-turns 12
+            --allowedTools "Bash(gh pr create:*)"
+            --append-system-prompt "이슈에서 요청한 작업을 커밋·push한 뒤 gh pr create로 main 대상 PR을 직접 만들고, 작업 댓글에 PR 주소를 남긴다. main에 직접 push하거나 병합하지 않는다. .github/workflows는 수정하지 않는다."
