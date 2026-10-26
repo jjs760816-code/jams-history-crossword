@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>잼스.com | 역사 낱말풀이</title>
+<meta name="description" content="구석기부터 근현대까지, 입문부터 마스터까지 단계별로 푸는 한국사 낱말풀이(크로스워드) 게임">
+<style>
+:root{
+  --ink:#183d35; --ink-2:#224f42; --paper:#f7f2e6; --card:#fffdf7;
+  --gold:#ddb66c; --gold-soft:#f2d48c; --muted:#5c7067; --line:#b9c0ad; --line-soft:#e3dccb;
+  --ok:#2f7a55; --ok-bg:#dcefe2; --bad:#b4513a; --sel:#f6dfa2; --sel-word:#fbefcf; --given:#e9e4ef;
+  --cell:40px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;line-height:1.5}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:inherit}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+/* ---------- header (잼스 포털과 같은 형태) ---------- */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0 14px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none}
+.logo{width:42px;height:42px;border-radius:11px;background:var(--ink);color:#fff5dd;display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
+.brand b{display:block;font-size:17px;font-weight:800;letter-spacing:-.2px}
+.brand small{display:block;font-size:11px;color:var(--muted);letter-spacing:.5px}
+.nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.nav a.txt{font-size:13px;text-decoration:none;padding:0 6px}
+.pill{border:1px solid var(--line);background:transparent;border-radius:20px;padding:7px 14px;font-size:12px}
+.pill:hover{background:#efe8d6}
+
+/* ---------- hero ---------- */
+.hero{background:var(--ink);color:#fff5dd;border-radius:20px;box-shadow:0 12px 35px rgba(23,60,53,.094);
+  padding:30px 34px;display:grid;grid-template-columns:1.2fr 1fr;gap:24px;align-items:center;overflow:hidden}
+.eyebrow{font-size:11px;letter-spacing:1px;color:var(--gold-soft);margin:0 0 10px}
+.hero h1{font-size:30px;line-height:1.3;margin:0 0 12px;font-weight:700}
+.hero h1 span{color:var(--gold-soft)}
+.hero p{margin:0;font-size:14px;opacity:.9}
+.hero .cta{display:inline-block;margin-top:18px;background:var(--gold-soft);color:var(--ink);border:0;border-radius:9px;padding:10px 16px;font-weight:800;font-size:14px}
+.mini{display:grid;grid-template-columns:repeat(5,44px);grid-auto-rows:44px;gap:5px;justify-content:center}
+.mini i{border-radius:8px;display:grid;place-items:center;font-style:normal;font-weight:800;font-size:18px;position:relative}
+.mini .t{background:#fff5dd;color:var(--ink)}
+.mini .t.g{background:var(--gold-soft)}
+.mini .e{background:rgba(255,245,221,.07);border:1px dashed rgba(242,212,140,.35)}
+.mini .t sup{position:absolute;left:5px;top:3px;font-size:9px;font-weight:700;opacity:.6}
+.quote{margin-top:12px;text-align:center;font-size:12px;opacity:.85}
+
+/* ---------- section ---------- */
+.sec{margin:28px 0 0}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 12px;flex-wrap:wrap}
+.sec-h h2{font-size:19px;margin:0;font-weight:700}
+.sec-h p{margin:0;font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:22px;padding:8px 14px;font-size:14px;display:flex;flex-direction:column;align-items:flex-start;line-height:1.25;text-align:left}
+.chip small{font-size:10.5px;color:var(--muted)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:#fff5dd}
+.chip.on small{color:var(--gold-soft)}
+.note{margin:10px 0 0;font-size:12.5px;color:var(--muted);background:#efe8d6;border-radius:10px;padding:8px 12px;display:none}
+.note.show{display:block}
+
+/* level cards */
+.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.lv{background:var(--card);border:1px solid var(--line-soft);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;text-align:left;padding:0}
+.lv:hover{transform:translateY(-2px);transition:.15s}
+.lv.on{outline:3px solid var(--gold);outline-offset:-1px}
+.band{height:64px;position:relative;padding:14px}
+.tag{display:inline-block;background:var(--ink);color:#fff5dd;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:800;letter-spacing:.8px}
+.band .stars{position:absolute;right:14px;top:16px;font-size:12px;font-weight:700;color:var(--ink);background:rgba(255,253,247,.75);border-radius:12px;padding:2px 9px}
+.lv-body{padding:14px 18px 18px;display:flex;flex-direction:column;flex:1}
+.lv-body h3{margin:0 0 6px;font-size:20px}
+.lv-body p{margin:0;font-size:13px;color:#33534a}
+.lv-meta{border-top:1px solid var(--line-soft);margin-top:12px;padding-top:10px;font-size:11.5px;color:var(--muted)}
+.lv-meta b{display:block;color:var(--ink);font-size:12px}
+.lv-btn{margin-top:12px;border-radius:9px;color:#fff;font-weight:750;font-size:12.5px;padding:10px 14px;display:flex;justify-content:space-between}
+.bar{height:5px;border-radius:5px;background:#ece5d3;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--gold)}
+
+/* stages */
+.stages{display:grid;grid-template-columns:repeat(10,1fr);gap:10px}
+.stg{background:var(--card);border:1px solid var(--line-soft);border-radius:14px;padding:10px 4px 8px;text-align:center}
+.stg b{display:block;font-size:20px}
+.stg small{display:block;font-size:12px;letter-spacing:1px;color:#c9a352;min-height:18px}
+.stg.done{background:#f3ead2;border-color:#dfcda5}
+.stg:hover{border-color:var(--ink)}
+
+/* how-to */
+.how{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.how div{background:var(--card);border:1px solid var(--line-soft);border-radius:15px;padding:14px}
+.how .ic{width:34px;height:34px;border-radius:9px;background:var(--ink);color:#fff5dd;display:grid;place-items:center;font-weight:800;margin-bottom:8px}
+.how h4{margin:0 0 4px;font-size:14px}
+.how p{margin:0;font-size:12px;color:var(--muted)}
+footer{margin:34px 0 40px;font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* ---------- play ---------- */
+#play{display:none}
+body.playing #home{display:none}
+body.playing #play{display:block}
+.pbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:var(--ink);color:#fff5dd;border-radius:16px;padding:12px 16px}
+.pbar .back{background:transparent;border:1px solid rgba(255,245,221,.4);border-radius:18px;padding:6px 12px;font-size:12.5px;color:#fff5dd}
+.ptitle{flex:1;min-width:180px}
+.ptitle small{display:block;font-size:11px;color:var(--gold-soft);letter-spacing:.6px}
+.ptitle b{font-size:16px}
+.stats{display:flex;gap:16px;font-size:12px}
+.stats span{display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.stats b{font-size:17px;color:var(--gold-soft)}
+.pgrid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:18px;margin-top:16px;align-items:start}
+.boardbox{background:var(--card);border:1px solid var(--line-soft);border-radius:18px;padding:16px;display:flex;justify-content:center;overflow-x:auto;min-width:0}
+.board{display:grid;gap:var(--gap,3px);grid-auto-rows:var(--cell);margin:0 auto}
+.board .v{width:var(--cell);height:var(--cell)}
+.board .c{width:var(--cell);height:var(--cell);background:#fff;border:1.5px solid #cfc6af;border-radius:7px;position:relative;display:grid;place-items:center;
+  font-weight:800;font-size:calc(var(--cell) * .46);cursor:pointer;padding:0;user-select:none}
+.board .c .n{position:absolute;left:3px;top:1px;font-size:calc(var(--cell) * .23);font-weight:700;color:var(--muted);line-height:1.1}
+.board .c.w{background:var(--sel-word);border-color:var(--gold)}
+.board .c.s{background:var(--sel);border-color:#c79a3e}
+.board .c.k{color:var(--ink)}
+.board .c.ok{background:var(--ok-bg);border-color:#9cc9ad}
+.board .c.ok.w{background:#cfe8d7;border-color:var(--gold)}
+.board .c.gv{color:#6b4f91}
+.board .c.pop{animation:pop .35s ease}
+@keyframes pop{50%{transform:scale(1.12)}}
+
+.side{display:flex;flex-direction:column;gap:12px}
+.panel{background:var(--card);border:1px solid var(--line-soft);border-radius:18px;padding:16px}
+.cur-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.dir{background:var(--ink);color:#fff5dd;border-radius:8px;padding:3px 9px;font-size:12px;font-weight:800}
+.era{border:1px solid var(--line);border-radius:12px;padding:2px 8px;font-size:11px;color:var(--muted)}
+.len{font-size:12px;color:var(--muted);margin-left:auto}
+.clue{font-size:16px;font-weight:600;margin:0 0 10px;min-height:48px}
+.pattern{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.pattern i{width:32px;height:32px;border-radius:7px;border:1.5px dashed var(--line);display:grid;place-items:center;font-style:normal;font-weight:800}
+.pattern i.k{border-style:solid;background:var(--sel-word)}
+.hintline{font-size:13px;background:#efe8d6;border-radius:9px;padding:6px 10px;margin-bottom:10px;display:none}
+.hintline.show{display:block}
+.ans{display:flex;gap:8px}
+.ans input{flex:1;min-width:0;border:2px solid var(--line);border-radius:11px;padding:11px 12px;font-size:17px;font-weight:700;background:#fff;color:var(--ink);font-family:inherit}
+.ans input:focus{outline:none;border-color:var(--ink)}
+.ans button{background:var(--ink);color:#fff5dd;border:0;border-radius:11px;padding:0 18px;font-weight:800;font-size:15px}
+.msg{min-height:22px;font-size:13px;margin-top:8px;font-weight:600}
+.msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)} .msg.warn{color:#9a6a12}
+.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.choices{display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px}
+.choices.show{display:grid}
+.choices button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px;font-weight:700}
+.choices button:hover{border-color:var(--ink)}
+.solvedline{display:none;color:var(--ok);font-weight:700;font-size:14px}
+.solvedline.show{display:block}
+
+.items{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.item{border:1px solid var(--line-soft);background:#fffaf0;border-radius:12px;padding:8px 2px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;font-size:11px}
+.item .ic{width:28px;height:28px;border-radius:8px;background:var(--ink);color:#fff5dd;display:grid;place-items:center;font-weight:800;font-size:14px}
+.item .cnt{position:absolute;right:4px;top:3px;background:var(--gold);color:var(--ink);border-radius:9px;font-size:10px;font-weight:800;padding:0 5px}
+.item:disabled{opacity:.42;cursor:not-allowed}
+.item:not(:disabled):hover{border-color:var(--ink)}
+.items-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.items-h h3{margin:0;font-size:14px}
+.items-h small{font-size:11px;color:var(--muted)}
+
+.lists{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.lists h3{font-size:13px;margin:0 0 6px;display:flex;align-items:center;gap:6px}
+.lists ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.lists li{font-size:12.5px;padding:5px 7px;border-radius:8px;cursor:pointer;line-height:1.4}
+.lists li b{margin-right:4px}
+.lists li:hover{background:#f3ecdb}
+.lists li.on{background:var(--sel-word)}
+.lists li.ok{color:#7c8c84;text-decoration:line-through;text-decoration-color:#b8c4bd}
+.below{margin-top:16px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(24,61,53,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+.modal.show{display:flex}
+.mbox{background:var(--card);border-radius:20px;max-width:520px;width:100%;max-height:90vh;overflow:auto;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.mbox h2{margin:0 0 6px;font-size:22px}
+.mbox p{margin:0 0 12px;font-size:14px;color:#33534a}
+.big-stars{font-size:40px;letter-spacing:6px;color:var(--gold);text-align:center;margin:8px 0}
+.big-stars .off{color:#e3dccb}
+.rgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+.rgrid div{background:#f3ecdb;border-radius:12px;padding:10px 4px;text-align:center;font-size:11px;color:var(--muted)}
+.rgrid b{display:block;font-size:18px;color:var(--ink)}
+.review{border-top:1px solid var(--line-soft);margin-top:10px;padding-top:10px;max-height:220px;overflow:auto}
+.review div{font-size:12.5px;padding:4px 0;border-bottom:1px dashed var(--line-soft)}
+.review b{color:var(--ink-2)}
+.mbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.btn{border:0;border-radius:10px;padding:11px 16px;font-weight:800;font-size:14px;background:var(--ink);color:#fff5dd}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn.gold{background:var(--gold-soft);color:var(--ink)}
+.toast{position:fixed;left:50%;top:18px;transform:translateX(-50%) translateY(-80px);background:var(--ink);color:#fff5dd;border-radius:22px;padding:9px 18px;font-weight:700;font-size:14px;transition:.25s;z-index:60;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.loading{padding:40px;text-align:center;color:var(--muted)}
+
+/* print */
+#print{display:none}
+@media print{
+  body>*:not(#print){display:none!important}
+  #print{display:block;color:#000;font-size:11pt}
+  #print h1{font-size:16pt;margin:0 0 4pt}
+  #print .meta{font-size:9pt;margin-bottom:8pt}
+  #print .pb{display:grid;gap:0;margin:0 auto 10pt;width:max-content}
+  #print .pb div{width:30pt;height:30pt;border:1px solid #000;position:relative;display:grid;place-items:center;font-weight:700;font-size:14pt;margin:-.5px}
+  #print .pb div.v{border-color:transparent}
+  #print .pb sup{position:absolute;left:2pt;top:1pt;font-size:6.5pt;font-weight:400}
+  #print .pl{columns:2;column-gap:18pt;font-size:9.5pt}
+  #print .pl h3{font-size:11pt;margin:6pt 0 3pt;break-after:avoid}
+  #print .pl p{margin:0 0 3pt;break-inside:avoid}
+}
+
+/* responsive */
+@media (max-width:960px){
+  .pgrid{grid-template-columns:minmax(0,1fr)}
+  .levels{grid-template-columns:1fr 1fr}
+  .how{grid-template-columns:1fr 1fr}
+  .stages{grid-template-columns:repeat(5,1fr)}
+}
+@media (max-width:640px){
+  .wrap{padding:0 16px}
+  .hero{grid-template-columns:1fr;padding:24px 20px}
+  .hero h1{font-size:25px}
+  .mini{grid-template-columns:repeat(5,36px);grid-auto-rows:36px}
+  .mini i{font-size:15px}
+  .levels{grid-template-columns:1fr}
+  .how{grid-template-columns:1fr}
+  .nav a.txt,.nav .hide-s{display:none}
+  .lists{grid-template-columns:1fr}
+  .boardbox{padding:10px}
+  .stats{gap:10px}
+  .rgrid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="https://xn--9t4b56g.com/">
+      <span class="logo">잼</span>
+      <span><b>잼스.com · 역사랑 놀자</b><small>역사를 읽다. 사람을 잇다.</small></span>
+    </a>
+    <nav class="nav">
+      <a class="txt" href="https://xn--9t4b56g.com/">게임 고르기</a>
+      <button class="pill" id="copyLink">주소 복사</button>
+      <button class="pill hide-s" id="howBtn">풀이 방법</button>
+    </nav>
+  </header>
+
+  <!-- ================= HOME ================= -->
+  <main id="home">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">초등 한국사 · 역사 놀이 · 04 · CROSSWORD</p>
+        <h1>역사를 풀다.<br><span>낱말을 잇다.</span></h1>
+        <p>구석기 주먹도끼부터 오늘의 대한민국까지.<br>열쇠를 읽고 칸을 채우며 한국사 낱말을 모아요.</p>
+        <button class="cta" id="heroStart">내 단계 고르기 ↘</button>
+      </div>
+      <div>
+        <div class="mini" aria-hidden="true">
+          <i class="t g"><sup>1</sup>고</i><i class="t">조</i><i class="t"><sup>2</sup>선</i><i class="e"></i><i class="e"></i>
+          <i class="t">려</i><i class="e"></i><i class="t">사</i><i class="e"></i><i class="e"></i>
+          <i class="t">청</i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i>
+          <i class="t g"><sup>3</sup>자</i><i class="t">격</i><i class="t">루</i><i class="e"></i><i class="e"></i>
+        </div>
+        <p class="quote">“잼스와 함께, 재미있게 스스로!”</p>
+      </div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-h"><h2>1. 시대(주제) 고르기</h2><p>궁금한 시대를 골라 그 시대 낱말만 풀어요.</p></div>
+      <div class="chips" id="topics"></div>
+      <p class="note" id="poolNote"></p>
+    </section>
+
+    <section class="sec" id="levelSec">
+      <div class="sec-h"><h2>2. 단계 고르기</h2><p>입문 → 초급 → 중급 → 상급 → 고급 → 마스터, 단계마다 낱말풀이 20개.</p></div>
+      <div class="levels" id="levels"></div>
+    </section>
+
+    <section class="sec" id="stageSec">
+      <div class="sec-h"><h2 id="stageTitle">3. 낱말풀이 고르기</h2><p id="stageSub"></p></div>
+      <div class="stages" id="stages"></div>
+    </section>
+
+    <section class="sec" id="howSec">
+      <div class="sec-h"><h2>찬스 아이템</h2><p>막힐 때 쓰면 점수가 조금 줄어요. 단계가 오를수록 개수가 줄어들어요.</p></div>
+      <div class="how" id="howItems"></div>
+    </section>
+
+    <footer>
+      <span>역사랑 놀자 · 역사를 읽다. 사람을 잇다.</span>
+      <span>기록은 이 기기의 브라우저에 저장돼요.</span>
+    </footer>
+  </main>
+
+  <!-- ================= PLAY ================= -->
+  <main id="play">
+    <div class="pbar">
+      <button class="back" id="backBtn">← 단계 고르기</button>
+      <div class="ptitle"><small id="pSub"></small><b id="pTitle"></b></div>
+      <div class="stats">
+        <span><b id="stSolved">0/0</b>맞힌 낱말</span>
+        <span><b id="stScore">0</b>점수</span>
+        <span><b id="stTime">0:00</b>시간</span>
+      </div>
+    </div>
+    <div class="pgrid">
+      <div>
+        <div class="boardbox" id="boardbox"><div class="board" id="board"></div></div>
+        <div class="tools">
+          <button class="pill" id="printBlank">문제지 인쇄</button>
+          <button class="pill" id="printKey">정답지 인쇄</button>
+          <button class="pill" id="restartBtn">처음부터 다시</button>
+        </div>
+      </div>
+      <div class="side">
+        <div class="panel" id="curPanel">
+          <div class="cur-h"><span class="dir" id="curDir">가로 1</span><span class="era" id="curEra"></span><span class="len" id="curLen"></span></div>
+          <p class="clue" id="curClue"></p>
+          <div class="pattern" id="curPattern"></div>
+          <div class="hintline" id="curHint"></div>
+          <form class="ans" id="ansForm" autocomplete="off">
+            <input id="ansInput" type="text" inputmode="text" placeholder="정답을 쓰고 Enter" aria-label="정답 입력" lang="ko">
+            <button type="submit">확인</button>
+          </form>
+          <div class="solvedline" id="solvedLine">✓ 맞혔어요! 다른 열쇠를 골라 보세요.</div>
+          <div class="choices" id="choices"></div>
+          <div class="msg" id="msg"></div>
+        </div>
+        <div class="panel">
+          <div class="items-h"><h3>찬스 아이템</h3><small>고른 낱말에 써요</small></div>
+          <div class="items" id="items"></div>
+        </div>
+        <div class="panel lists">
+          <div><h3><span class="dir">가로</span> 열쇠</h3><ol id="listH"></ol></div>
+          <div><h3><span class="dir">세로</span> 열쇠</h3><ol id="listV"></ol></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<div class="toast" id="toast"></div>
+<div id="print"></div>
+
+<script src="data.js?v=1"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
