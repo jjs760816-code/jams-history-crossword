@@ -71,6 +71,31 @@
   DB.rec = DB.rec || {};
   const recKey = (L, topic, s) => `${LEVELS[L].id}|${topic}|${s}`;
 
+  // ---------- 이어 풀기(풀던 중 저장) ----------
+  // 이 기기의 브라우저(localStorage)에만 저장해요. 서버·계정과 동기화하지 않아요.
+  // 판 모양(sig)이 달라지면(낱말 데이터 변경 등) 저장한 풀이를 버리고 새로 시작해요.
+  const PKEY = 'jams-crossword-progress-v1';
+  const PVER = 1;
+  const PMAX = 12;
+  const progress = {
+    all() {
+      try {
+        const o = JSON.parse(localStorage.getItem(PKEY));
+        return o && o.v === PVER && o.items && typeof o.items === 'object' && !Array.isArray(o.items) ? o.items : {};
+      } catch (e) { return {}; }
+    },
+    write(items) { try { localStorage.setItem(PKEY, JSON.stringify({ v: PVER, items })); } catch (e) { /* 저장 불가 환경 */ } },
+    get(key) { const v = this.all()[key]; return v && typeof v === 'object' && !Array.isArray(v) ? v : null; },
+    put(key, val) {
+      const items = this.all();
+      items[key] = val;
+      const at = k => (items[k] && +items[k].at) || 0;
+      Object.keys(items).sort((a, b) => at(b) - at(a)).slice(PMAX).forEach(k => delete items[k]);
+      this.write(items);
+    },
+    drop(key) { const items = this.all(); if (key in items) { delete items[key]; this.write(items); } }
+  };
+
   // ---------- 난수 ----------
   function seedOf(str) {
     let h = 1779033703 ^ str.length;
@@ -303,6 +328,46 @@
     return (cache[key] = { eras, list });
   }
 
+  // 판의 낱말·위치가 같은지 확인하는 지문
+  const puzzleSig = pz => seedOf(`${pz.rows}x${pz.cols}|` +
+    pz.words.map(w => `${w.a}@${w.r},${w.col}${w.dir}`).join(';')).toString(36);
+
+  // 저장한 풀이를 검사해 되살릴 수 있는 값만 돌려줌. 맞지 않으면 null.
+  function restoreState(saved, pz, lv) {
+    if (!saved || saved.v !== PVER || saved.sig !== puzzleSig(pz)) return null;
+    const n = pz.words.length;
+    const idx = a => Array.isArray(a) && a.every(i => Number.isInteger(i) && i >= 0 && i < n) ? new Set(a) : null;
+    const solved = idx(saved.solved);
+    if (!solved || solved.size >= n) return null;
+    if (!Array.isArray(saved.given)) return null;
+    const given = new Set();
+    for (const k of saved.given) {
+      const m = typeof k === 'string' && k.match(/^(\d+),(\d+)$/);
+      if (!m || !pz.grid[+m[1]] || !pz.grid[+m[1]][+m[2]]) return null;
+      given.add(k);
+    }
+    const used = {}, items = {};
+    let penalty = 0;
+    for (const it of ITEMS) {
+      const u = saved.used && saved.used[it.id];
+      if (!Number.isInteger(u) || u < 0 || u > lv.items[it.id]) return null;
+      used[it.id] = u; items[it.id] = lv.items[it.id] - u; penalty += u * it.cost;
+    }
+    const usedOn = {};
+    for (const id of ['cho', 'choice', 'search']) {
+      const s = idx(saved.usedOn && saved.usedOn[id]);
+      if (!s || s.size > used[id]) return null;
+      usedOn[id] = s;
+    }
+    const misses = saved.misses, sec = saved.sec;
+    if (!Number.isInteger(misses) || misses < 0 || misses > 100000) return null;
+    if (!Number.isInteger(sec) || sec < 0 || sec > 360000) return null;
+    penalty += misses * MISS_COST;
+    const sel = Number.isInteger(saved.sel) && saved.sel >= 0 && saved.sel < n ? saved.sel : null;
+    const draft = typeof saved.draft === 'string' ? saved.draft.slice(0, 40) : '';
+    return { solved, given, used, items, usedOn, misses, sec, penalty, sel, draft };
+  }
+
   // ---------- 화면 공통 ----------
   let toastT;
   function toast(t) {
@@ -371,14 +436,54 @@
     } else note.classList.remove('show');
 
     let html = '';
+    const saved = progress.all();
     for (let s = 0; s < STAGES; s++) {
-      const r = DB.rec[recKey(UI.L, UI.topic, s)];
-      html += `<button class="stg ${r ? 'done' : ''}" data-stage="${s}"><b>${s + 1}</b><small>${r ? starStr(r.stars) : ''}</small></button>`;
+      const key = recKey(UI.L, UI.topic, s);
+      const r = DB.rec[key], p = saved[key];
+      html += `<button class="stg ${r ? 'done' : ''} ${p ? 'prog' : ''}" data-stage="${s}"${p ? ' title="풀던 판 · 이어서 풀기"' : ''}><b>${s + 1}</b><small>${r ? starStr(r.stars) : ''}</small>${p ? '<em>이어서</em>' : ''}</button>`;
     }
     $('#stages').innerHTML = html;
+    renderResume(saved);
 
     $('#howItems').innerHTML = ITEMS.map(it =>
       `<div><span class="ic">${it.ic}</span><h4>${it.name} <small style="color:var(--muted);font-weight:400">−${it.cost}점</small></h4><p>${it.desc}</p></div>`).join('');
+  }
+
+  // 풀던 판 목록(최근 3개). 판을 다시 만들지 않고 저장한 요약만 보여 줌.
+  function resumeList(saved) {
+    return Object.keys(saved).map(key => {
+      const p = saved[key], m = key.split('|');
+      const L = LEVELS.findIndex(l => l.id === m[0]), stage = +m[2];
+      if (m.length !== 3 || L < 0 || !(m[1] === 'all' || ERA_NAME[m[1]]) || !Number.isInteger(stage) || stage < 0 || stage >= STAGES) return null;
+      if (!p || !Array.isArray(p.solved) || !Number.isInteger(p.total) || !Number.isInteger(p.sec)) return null;
+      return { key, L, topic: m[1], stage, solved: p.solved.length, total: p.total, sec: p.sec, at: +p.at || 0 };
+    }).filter(Boolean).sort((a, b) => b.at - a.at).slice(0, 3);
+  }
+
+  function renderResume(saved) {
+    let sec = $('#resumeSec');
+    if (!sec) {
+      const st = document.createElement('style');
+      st.textContent = '#resumeSec .rs-list{display:grid;gap:8px}#resumeSec .rs{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--card);border:2px solid #dfcda5;border-radius:14px;padding:12px 14px}#resumeSec .rs div{flex:1;min-width:180px}#resumeSec .rs small{display:block;color:var(--muted);font-size:12px}#resumeSec .rs-del{background:transparent;border:0;color:var(--muted);font-size:12px;text-decoration:underline}.stg.prog{border:2px solid #c9a352}.stg em{display:block;font-style:normal;font-size:11px;font-weight:800;color:#805a2b}';
+      document.head.appendChild(st);
+      sec = document.createElement('section');
+      sec.className = 'sec';
+      sec.id = 'resumeSec';
+      $('#home .hero').after(sec);
+      sec.addEventListener('click', e => {
+        const go = e.target.closest('[data-resume]');
+        if (go) { location.hash = go.dataset.resume; return; }
+        const del = e.target.closest('[data-forget]');
+        if (del) { progress.drop(del.dataset.forget); renderHome(); }
+      });
+    }
+    const list = resumeList(saved);
+    sec.style.display = list.length ? '' : 'none';
+    sec.innerHTML = list.length ? `<div class="sec-h"><h2>▶ 이어서 풀기</h2><p>풀던 낱말풀이가 이 기기의 브라우저에 저장돼 있어요. (다른 기기·계정과는 연결되지 않아요)</p></div>
+      <div class="rs-list">${list.map(x => `<div class="rs"><div><b>${esc(LEVELS[x.L].name)} · ${esc(x.topic === 'all' ? '전체 시대' : ERA_NAME[x.topic])} · ${x.stage + 1}번</b>
+        <small>맞힌 낱말 ${Math.min(x.solved, x.total)}/${x.total} · ${fmtTime(x.sec)} 동안 풀었어요</small></div>
+        <button class="btn" data-resume="#play/${LEVELS[x.L].id}/${x.topic}/${x.stage + 1}">이어서 풀기 →</button>
+        <button class="rs-del" data-forget="${esc(x.key)}">저장 지우기</button></div>`).join('')}</div>` : '';
   }
 
   function saveUI() { DB.topic = UI.topic; DB.L = UI.L; store.save(DB); }
@@ -402,10 +507,12 @@
   let G = null;
   let timer = null;
 
-  function startGame(L, topic, stage) {
+  // fresh: 저장한 풀이를 버리고 처음부터(다시 풀기)
+  function startGame(L, topic, stage, fresh) {
     const set = getSet(L, topic);
     const pz = set.list[stage];
     const lv = LEVELS[L];
+    const key = recKey(L, topic, stage);
     closeModal();
     G = {
       L, topic, stage, pz, lv,
@@ -418,6 +525,22 @@
     };
     // 첫 낱말: 1번 가로(없으면 첫 낱말)
     G.sel = orderedIdx()[0];
+    let resumed = null, discarded = false;
+    if (fresh) progress.drop(key);
+    else {
+      const saved = progress.get(key);
+      resumed = saved && restoreState(saved, pz, lv);
+      if (saved && !resumed) { progress.drop(key); discarded = true; }
+    }
+    if (resumed) {
+      Object.assign(G, { solved: resumed.solved, given: resumed.given, items: resumed.items, used: resumed.used,
+        usedOn: resumed.usedOn, misses: resumed.misses, penalty: resumed.penalty, sec: resumed.sec,
+        start: Date.now() - resumed.sec * 1000 });
+      // 보기 찬스는 같은 낱말·판 번호로 항상 같은 보기를 만들므로 다시 계산
+      G.usedOn.choice.forEach(i => { G.choiceOpts[i] = makeChoices(pz.words[i]); });
+      if (resumed.sel !== null && !G.solved.has(resumed.sel)) G.sel = resumed.sel;
+      else if (G.solved.has(G.sel)) { const nx = nextUnsolved(); if (nx >= 0) G.sel = nx; }
+    }
     const topicName = topic === 'all' ? '전체 시대' : ERA_NAME[topic];
     $('#pSub').textContent = `${String(L + 1).padStart(2, '0')} · ${lv.en} · ${topicName}`;
     $('#pTitle').textContent = `${lv.name} 낱말풀이 ${stage + 1}번`;
@@ -425,14 +548,35 @@
     window.scrollTo(0, 0);
     renderItems();
     renderAll();
+    $('#ansInput').value = resumed ? resumed.draft : '';
     clearInterval(timer);
+    let tick = 0;
     timer = setInterval(() => {
       if (!G || G.done) return;
       G.sec = Math.floor((Date.now() - G.start) / 1000);
       $('#stTime').textContent = fmtTime(G.sec);
+      if (++tick % 15 === 0) saveProgress();
     }, 1000);
-    $('#stTime').textContent = '0:00';
+    $('#stTime').textContent = fmtTime(G.sec);
+    if (resumed) msg('저장된 풀이를 이어서 풀어요. 처음부터 하려면 ‘다시 풀기’를 누르세요.', 'ok');
+    else if (discarded) msg('낱말풀이가 바뀌어 저장된 풀이를 이어 갈 수 없어요. 처음부터 시작해요.', 'warn');
     focusInput();
+  }
+
+  // 풀던 상태를 이 기기에 저장(답 입력·확인·찬스·낱말 고르기마다)
+  function saveProgress() {
+    if (!G || G.done) return;
+    const key = recKey(G.L, G.topic, G.stage);
+    const draft = $('#ansInput').value.slice(0, 40);
+    const used = Object.values(G.used).some(n => n > 0);
+    if (!G.solved.size && !G.given.size && !G.misses && !used && !draft && !progress.get(key)) return;
+    G.sec = Math.floor((Date.now() - G.start) / 1000);
+    progress.put(key, {
+      v: PVER, sig: puzzleSig(G.pz), total: G.pz.words.length,
+      solved: [...G.solved], given: [...G.given], used: Object.assign({}, G.used),
+      usedOn: { cho: [...G.usedOn.cho], choice: [...G.usedOn.choice], search: [...G.usedOn.search] },
+      misses: G.misses, sec: G.sec, sel: G.sel, draft, at: Date.now()
+    });
   }
 
   const isKnown = (r, c) => {
@@ -545,6 +689,7 @@
     if (!keepMsg) msg('');
     $('#ansInput').value = '';
     renderAll();
+    saveProgress();
     const li = document.querySelector(`[data-w="${i}"]`);
     if (li && window.innerWidth > 960) li.scrollIntoView({ block: 'nearest' });
   }
@@ -607,9 +752,11 @@
       const pop = solveWord(G.sel);
       toast('정답! +100');
       afterSolve(pop, `정답이에요! ‘${w.a}’`);
+      saveProgress();
     } else {
       G.misses++; G.penalty += MISS_COST;
       renderStats();
+      saveProgress();
       msg(`아쉬워요! 다시 생각해 볼까요? (−${MISS_COST}점)`, 'bad');
       const p = $('#curPanel'); p.classList.remove('shake'); void p.offsetWidth; p.classList.add('shake');
     }
@@ -645,6 +792,7 @@
       const pop = new Set([target[0] + ',' + target[1]]);
       afterSolve(pop, '글자 하나를 열었어요.');
       if (!G.done && !G.solved.has(G.sel)) msg('글자 하나를 열었어요.', 'ok');
+      saveProgress();
       return;
     }
     if (id === 'reveal') {
@@ -655,6 +803,7 @@
         spend(id);
         const pop = solveWord(G.sel);
         afterSolve(pop, `정답은 ‘${w.a}’였어요.`);
+        saveProgress();
       };
       return;
     }
@@ -663,6 +812,7 @@
     if (id === 'cho') { renderCurrent(); msg('초성 힌트를 열었어요.', 'ok'); }
     if (id === 'choice') { G.choiceOpts[G.sel] = makeChoices(w); renderCurrent(); msg('보기에서 정답을 골라 보세요.', 'ok'); }
     if (id === 'search') openSearch(w);
+    saveProgress();
   }
 
   function spend(id) {
@@ -694,6 +844,7 @@
 
   function finish() {
     G.done = true;
+    progress.drop(recKey(G.L, G.topic, G.stage));
     clearInterval(timer);
     G.sec = Math.floor((Date.now() - G.start) / 1000);
     $('#stTime').textContent = fmtTime(G.sec);
@@ -722,7 +873,7 @@
         <button class="btn ghost" id="goHome">단계 고르기</button>
       </div>`);
     if (hasNext) $('#goNext').onclick = () => { closeModal(); location.hash = `#play/${G.lv.id}/${G.topic}/${G.stage + 2}`; };
-    $('#goAgain').onclick = () => { closeModal(); startGame(G.L, G.topic, G.stage); };
+    $('#goAgain').onclick = () => { closeModal(); startGame(G.L, G.topic, G.stage, true); };
     $('#goHome').onclick = () => { closeModal(); location.hash = ''; };
   }
 
@@ -761,8 +912,11 @@
   $('#restartBtn').addEventListener('click', () => {
     openModal(`<h2>처음부터 다시 풀까요?</h2><p>지금까지 푼 내용과 쓴 아이템이 처음으로 돌아가요.</p>
       <div class="mbtns"><button class="btn" id="doRestart">다시 풀기</button><button class="btn ghost" data-close>취소</button></div>`);
-    $('#doRestart').onclick = () => { closeModal(); startGame(G.L, G.topic, G.stage); };
+    $('#doRestart').onclick = () => { closeModal(); startGame(G.L, G.topic, G.stage, true); };
   });
+  $('#ansInput').addEventListener('input', () => saveProgress());
+  window.addEventListener('pagehide', () => saveProgress());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveProgress(); });
   window.addEventListener('resize', () => { if (G && document.body.classList.contains('playing')) { fitCells(); } });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeModal();
@@ -794,7 +948,8 @@
 
   // ---------- 주소(해시)로 화면 전환 ----------
   function route() {
-    const m = location.hash.match(/^#play\/(\w+)\/(\w+)\/(\d+)$/);
+    saveProgress(); // 다른 판·홈으로 가기 전 풀던 판 저장
+    const m =location.hash.match(/^#play\/(\w+)\/(\w+)\/(\d+)$/);
     if (m) {
       const L = LEVELS.findIndex(l => l.id === m[1]);
       const topic = m[2] === 'all' || ERA_NAME[m[2]] ? m[2] : null;
@@ -816,5 +971,7 @@
   route();
 
   // 테스트·확인용
-  window.JAMS_CROSSWORD = { WORDS, LEVELS, ERAS, getSet, getPools };
+  window.JAMS_CROSSWORD = { WORDS, LEVELS, ERAS, getSet, getPools, puzzleSig, restoreState, PROGRESS_KEY: PKEY,
+    current: () => G && { L: G.L, topic: G.topic, stage: G.stage, sel: G.sel, solved: [...G.solved], given: [...G.given],
+      used: Object.assign({}, G.used), items: Object.assign({}, G.items), misses: G.misses, penalty: G.penalty, sec: G.sec, done: G.done } };
 })();
