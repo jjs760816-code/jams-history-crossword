@@ -30,7 +30,7 @@ function makeEl(id) {
       toggle: (c, on) => ((on ?? !classes.has(c)) ? classes.add(c) : classes.delete(c)) },
     addEventListener(type, fn) { (listeners[type] ||= []).push(fn); },
     fire(type, ev = {}) { for (const fn of listeners[type] || []) fn({ preventDefault() {}, target: { closest: () => null }, ...ev }); },
-    after() {}, appendChild() {}, focus() {}, scrollIntoView() {}
+    after() {}, appendChild() {}, focus() {}, scrollIntoView() {}, querySelectorAll() { return []; }
   };
 }
 
@@ -111,7 +111,7 @@ test('홈 화면에 이어서 풀기 항목이 보이고 저장 지우기가 동
   const html = a.el('#resumeSec').innerHTML;
   assert.match(html, /이어서 풀기/);
   assert.match(html, /#play\/basic\/goryeo\/3/);
-  assert.match(html, /다른 기기·계정과는 연결되지 않아요/);
+  assert.match(html, /로그인하면 학생 계정에도 저장돼요/);
   a.el('#resumeSec').fire('click', { target: { closest: s => (s === '[data-forget]' ? { dataset: { forget: 'basic|goryeo|2' } } : null) } });
   assert.equal(saved(storage)['basic|goryeo|2'], undefined);
 });

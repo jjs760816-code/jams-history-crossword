@@ -229,8 +229,9 @@ body.playing #play{display:block}
   .rgrid{grid-template-columns:repeat(2,1fr)}
 }
 </style>
+<link rel="stylesheet" href="account.css?v=1">
 </head>
-<body>
+<body class="cw-wait">
 <div class="wrap">
   <header class="top">
     <a class="brand" href="https://xn--9t4b56g.com/">
@@ -243,6 +244,9 @@ body.playing #play{display:block}
       <button class="pill hide-s" id="howBtn">풀이 방법</button>
     </nav>
   </header>
+
+  <!-- 학생 계정: 로그인·클라우드 저장 상태 (account.js) -->
+  <section class="cw-acct" id="cwAccount" aria-live="polite" aria-label="학생 계정과 저장 상태"><p class="cw-lead">학생 계정을 확인하고 있어요…</p></section>
 
   <!-- ================= HOME ================= -->
   <main id="home">
@@ -287,7 +291,7 @@ body.playing #play{display:block}
 
     <footer>
       <span>역사랑 놀자 · 역사를 읽다. 사람을 잇다.</span>
-      <span>기록은 이 기기의 브라우저에 저장돼요.</span>
+      <span>로그인하면 기록이 학생 계정에 저장돼요. 로그인하지 않으면 이 기기의 브라우저에만 저장돼요.</span>
     </footer>
   </main>
 
@@ -338,11 +342,12 @@ body.playing #play{display:block}
   </main>
 </div>
 
-<div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<div class="modal" id="modal"><div class="mbox" id="mbox" role="dialog" aria-modal="true" aria-labelledby="mTitle"></div></div>
 <div class="toast" id="toast"></div>
 <div id="print"></div>
 
 <script src="data.js?v=1"></script>
-<script src="app.js?v=1"></script>
+<script src="account.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
