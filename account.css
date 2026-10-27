@@ -1,0 +1,68 @@
+/* 잼스 역사 낱말풀이 — 학생 계정 줄·판 완성 축하 (index.html 의 초록·금빛 종이 디자인 변수 사용) */
+
+/* 계정 확인 전에는 판·기록을 그리지 않음(앞 학생 기록이 잠깐 보이지 않게) */
+body.cw-wait main{display:none}
+
+/* ---------- 학생 계정 줄 ---------- */
+.cw-acct{background:var(--card);border:1px solid var(--line-soft);border-left:5px solid var(--gold);border-radius:16px;padding:12px 16px;margin:0 0 16px;font-size:13.5px}
+.cw-acct p{margin:0 0 6px}
+.cw-lead{color:var(--ink)}
+.cw-small{font-size:12px;color:var(--muted)}
+.cw-small a{word-break:break-all;font-weight:700}
+.cw-msg{font-size:12.5px;font-weight:700;color:var(--bad);min-height:0}
+.cw-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px}
+.cw-row .btn{padding:8px 13px;font-size:13px;text-decoration:none;display:inline-block}
+.cw-who{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cw-who b{font-size:15px}
+.cw-badge{background:var(--ink);color:#fff5dd;border-radius:8px;padding:2px 8px;font-size:11px;font-weight:800}
+.cw-sync{font-size:12px;border-radius:12px;padding:2px 10px;background:#efe8d6;color:var(--muted)}
+.cw-sync.cw-saved,.cw-sync.cw-idle{background:var(--ok-bg);color:var(--ok)}
+.cw-sync.cw-saving,.cw-sync.cw-pending{background:#f6ecd2;color:#805a2b}
+.cw-sync.cw-offline,.cw-sync.cw-stale,.cw-sync.cw-login,.cw-sync.cw-reset,.cw-sync.cw-conflict{background:#fbe9d4;color:#9a6a12}
+.cw-sync.cw-error,.cw-sync.cw-too_large{background:#f6dcd4;color:var(--bad)}
+.cw-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin:6px 0}
+.cw-form label{display:flex;flex-direction:column;font-size:11.5px;color:var(--muted);gap:3px;flex:1;min-width:140px}
+.cw-form input{border:2px solid var(--line);border-radius:10px;padding:8px 10px;font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
+.cw-form input:focus{outline:none;border-color:var(--ink)}
+.cw-form .btn{padding:10px 14px;font-size:13px}
+.cw-conflict,.cw-import,.cw-warn{margin-top:10px;border-radius:12px;padding:10px 12px;background:#f3ecdb}
+.cw-warn{background:#fbe9d4}
+.cw-conflict .cw-row span{flex:1;min-width:150px;font-weight:700}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+/* ---------- 판 완성 축하 ---------- */
+.cw-cele{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;margin:-4px 0 14px;padding:14px 16px;border-radius:16px;
+  background:linear-gradient(135deg,var(--ink) 0%,hsl(calc(150 + var(--cw-hue,0) / 12),38%,22%) 100%);color:#fff5dd;
+  animation:cw-rise .45s ease-out}
+.cw-cele small{display:block;font-size:11.5px;color:var(--gold-soft);letter-spacing:.3px}
+.cw-cele b{display:block;font-size:17px}
+.cw-stars{color:var(--gold-soft);letter-spacing:3px;font-size:18px}
+.cw-emblem{flex:none;width:58px;height:58px;border-radius:50%;display:grid;place-items:center;font-size:30px;background:#fff5dd;
+  box-shadow:0 0 0 4px var(--gold),0 6px 18px rgba(0,0,0,.25);animation:cw-spin .7s ease-out}
+.cw-tier2 .cw-emblem{box-shadow:0 0 0 4px #cfd6d2,0 6px 18px rgba(0,0,0,.25)}
+.cw-tier1 .cw-emblem{box-shadow:0 0 0 4px #c48a5a,0 6px 18px rgba(0,0,0,.25)}
+.cw-confetti{position:absolute;inset:0;pointer-events:none}
+.cw-confetti i{position:absolute;top:-10px;width:7px;height:11px;border-radius:2px;opacity:0;animation:cw-fall 1.5s ease-in forwards}
+.cw-level{background:#f3ead2;border:2px solid #dfcda5;border-radius:14px;padding:12px 14px;margin:0 0 12px}
+.cw-level b{display:block;font-size:15px;margin-bottom:4px}
+.cw-level p{margin:0 0 8px;font-size:13px}
+.cw-fx{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin:-4px 0 10px}
+.cw-fx label{display:flex;align-items:center;gap:5px;cursor:pointer}
+@keyframes cw-rise{from{transform:translateY(8px);opacity:0}}
+@keyframes cw-spin{from{transform:scale(.4) rotate(-40deg)}70%{transform:scale(1.12) rotate(6deg)}}
+@keyframes cw-fall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(130px) rotate(320deg)}}
+
+/* 움직임 줄이기: 움직임 없이 조용한 문구만 */
+.cw-quiet,.cw-quiet .cw-emblem{animation:none}
+@media (prefers-reduced-motion: reduce){
+  .cw-cele,.cw-emblem,.cw-confetti i{animation:none!important}
+  .cw-confetti{display:none}
+}
+
+@media (max-width:640px){
+  .cw-acct{padding:10px 12px}
+  .cw-cele{padding:12px;gap:10px}
+  .cw-emblem{width:48px;height:48px;font-size:24px}
+  .cw-cele b{font-size:15px}
+  .cw-form .btn{flex:1}
+}

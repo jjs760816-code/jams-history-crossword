@@ -62,38 +62,52 @@
   });
 
   // ---------- 저장 ----------
-  const SKEY = 'jams-crossword-v1';
+  // 학생 계정(account.js)이 있으면 로그인한 학생(player.ref)별 칸에, 없으면 예전처럼 이 기기 공용 칸에 저장해요.
+  const ACC = window.CrosswordAccount || null;
+  const local = ACC ? ACC.storage : (() => { try { return window.localStorage; } catch (e) { return null; } })();
+  const SKEY_BASE = 'jams-crossword-v1';
+  let SKEY = SKEY_BASE;
   const store = {
-    load() { try { return JSON.parse(localStorage.getItem(SKEY)) || {}; } catch (e) { return {}; } },
-    save(o) { try { localStorage.setItem(SKEY, JSON.stringify(o)); } catch (e) { /* 저장 불가 환경 */ } }
+    load() { try { return JSON.parse(local.getItem(SKEY)) || {}; } catch (e) { return {}; } },
+    save(o) { try { local.setItem(SKEY, JSON.stringify(o)); } catch (e) { /* 저장 불가 환경 */ } }
   };
-  let DB = store.load();
-  DB.rec = DB.rec || {};
+  let DB = { rec: {} };
   const recKey = (L, topic, s) => `${LEVELS[L].id}|${topic}|${s}`;
+  // 이 기기에 저장한 뒤 계정 저장(서버)에 알림. 서버 저장은 account.js 가 모아서 보내요.
+  const notify = (kind, key, at) => { if (ACC) ACC.changed(kind, key, at); };
 
   // ---------- 이어 풀기(풀던 중 저장) ----------
-  // 이 기기의 브라우저(localStorage)에만 저장해요. 서버·계정과 동기화하지 않아요.
+  // 먼저 이 기기의 브라우저(localStorage)에 저장해요. 로그인한 학생이면 account.js 가 계정에도 저장해요.
   // 판 모양(sig)이 달라지면(낱말 데이터 변경 등) 저장한 풀이를 버리고 새로 시작해요.
-  const PKEY = 'jams-crossword-progress-v1';
+  const PKEY_BASE = 'jams-crossword-progress-v1';
+  let PKEY = PKEY_BASE;
   const PVER = 1;
   const PMAX = 12;
+  function applyScope() {
+    const k = ACC && ACC.keys();
+    SKEY = k ? k.rec : SKEY_BASE;
+    PKEY = k ? k.progress : PKEY_BASE;
+  }
   const progress = {
     all() {
       try {
-        const o = JSON.parse(localStorage.getItem(PKEY));
+        const o = JSON.parse(local.getItem(PKEY));
         return o && o.v === PVER && o.items && typeof o.items === 'object' && !Array.isArray(o.items) ? o.items : {};
       } catch (e) { return {}; }
     },
-    write(items) { try { localStorage.setItem(PKEY, JSON.stringify({ v: PVER, items })); } catch (e) { /* 저장 불가 환경 */ } },
+    write(items) { try { local.setItem(PKEY, JSON.stringify({ v: PVER, items })); } catch (e) { /* 저장 불가 환경 */ } },
     get(key) { const v = this.all()[key]; return v && typeof v === 'object' && !Array.isArray(v) ? v : null; },
     put(key, val) {
       const items = this.all();
       items[key] = val;
       const at = k => (items[k] && +items[k].at) || 0;
-      Object.keys(items).sort((a, b) => at(b) - at(a)).slice(PMAX).forEach(k => delete items[k]);
+      const out = Object.keys(items).sort((a, b) => at(b) - at(a)).slice(PMAX).map(k => [k, at(k)]);
+      out.forEach(([k]) => delete items[k]);
       this.write(items);
+      out.forEach(([k, t]) => notify('drop', k, t));
+      notify('put', key);
     },
-    drop(key) { const items = this.all(); if (key in items) { delete items[key]; this.write(items); } }
+    drop(key) { const items = this.all(); if (key in items) { delete items[key]; this.write(items); notify('drop', key); } }
   };
 
   // ---------- 난수 ----------
@@ -397,9 +411,7 @@
   }
 
   // ---------- 홈 ----------
-  const UI = { topic: DB.topic || 'all', L: DB.L != null ? DB.L : 0 };
-  if (UI.topic !== 'all' && !ERA_NAME[UI.topic]) UI.topic = 'all';
-  if (!LEVELS[UI.L]) UI.L = 0;
+  const UI = { topic: 'all', L: 0 }; // boot() 에서 지금 학생 칸의 값으로 채움
 
   function levelStars(L, topic) {
     let s = 0;
@@ -478,8 +490,11 @@
       });
     }
     const list = resumeList(saved);
+    const who = ACC && ACC.label();
     sec.style.display = list.length ? '' : 'none';
-    sec.innerHTML = list.length ? `<div class="sec-h"><h2>▶ 이어서 풀기</h2><p>풀던 낱말풀이가 이 기기의 브라우저에 저장돼 있어요. (다른 기기·계정과는 연결되지 않아요)</p></div>
+    sec.innerHTML = list.length ? `<div class="sec-h"><h2>▶ ${who ? `${esc(who)} 학생의 ` : ''}이어서 풀기</h2><p>${who
+      ? `풀던 낱말풀이가 ‘${esc(who)}’ 계정에 저장돼요. 다른 기기에서 로그인해도 이어 풀 수 있어요.`
+      : '풀던 낱말풀이가 이 기기의 브라우저에 저장돼 있어요. (로그인하면 학생 계정에도 저장돼요)'}</p></div>
       <div class="rs-list">${list.map(x => `<div class="rs"><div><b>${esc(LEVELS[x.L].name)} · ${esc(x.topic === 'all' ? '전체 시대' : ERA_NAME[x.topic])} · ${x.stage + 1}번</b>
         <small>맞힌 낱말 ${Math.min(x.solved, x.total)}/${x.total} · ${fmtTime(x.sec)} 동안 풀었어요</small></div>
         <button class="btn" data-resume="#play/${LEVELS[x.L].id}/${x.topic}/${x.stage + 1}">이어서 풀기 →</button>
@@ -857,12 +872,14 @@
     if (!prev || stars > prev.stars || (stars === prev.stars && sc > prev.score)) {
       DB.rec[key] = { stars, score: sc, time: G.sec, at: Date.now() };
       store.save(DB);
+      notify('rec', key);
     }
     const usedItems = Object.values(G.used).reduce((a, b) => a + b, 0);
     const words = orderedIdx().map(i => G.pz.words[i]);
     const hasNext = G.stage < STAGES - 1;
     const praise = stars === 3 ? '완벽해요! 역사 박사가 다 됐어요.' : stars === 2 ? '아주 잘했어요! 조금만 더 하면 별 3개!' : '끝까지 풀어 냈어요! 다시 풀면 별이 늘어요.';
-    openModal(`<h2>낱말풀이 완성!</h2>
+    const cele = celebration(stars, !prev || stars > prev.stars || (stars === prev.stars && sc > prev.score));
+    openModal(`${cele.html}<h2 id="mTitle">낱말풀이 완성!</h2>
       <div class="big-stars">${'★'.repeat(stars)}<span class="off">${'★'.repeat(3 - stars)}</span></div>
       <p style="text-align:center">${praise}</p>
       <div class="rgrid"><div><b>${sc}</b>점수 / ${max}</div><div><b>${fmtTime(G.sec)}</b>걸린 시간</div><div><b>${G.misses}</b>틀린 횟수</div><div><b>${usedItems}</b>쓴 아이템</div></div>
@@ -875,6 +892,87 @@
     if (hasNext) $('#goNext').onclick = () => { closeModal(); location.hash = `#play/${G.lv.id}/${G.topic}/${G.stage + 2}`; };
     $('#goAgain').onclick = () => { closeModal(); startGame(G.L, G.topic, G.stage, true); };
     $('#goHome').onclick = () => { closeModal(); location.hash = ''; };
+    cele.wire();
+  }
+
+  // ---------- 판 완성 축하 ----------
+  // 판마다 다른 배지·문구, 별 수에 따른 배지 빛깔. 색종이는 끌 수 있고, 소리는 학생이 켰을 때만(처음엔 꺼짐).
+  // 움직임 줄이기 설정이면 움직임 없이 조용한 문구만. 다음 판·다음 단계로 저절로 넘어가지 않아요.
+  const FX_KEY = 'jams-crossword-fx-v1';
+  const fxPrefs = {
+    load() { try { const o = JSON.parse(local.getItem(FX_KEY)) || {}; return { confetti: o.confetti !== false, sound: o.sound === true }; } catch (e) { return { confetti: true, sound: false }; } },
+    save(o) { try { local.setItem(FX_KEY, JSON.stringify(o)); } catch (e) { /* 저장 불가 환경 */ } }
+  };
+  const STAGE_BADGE = [
+    ['🪨', '주먹도끼'], ['🏺', '빗살무늬 토기'], ['🔔', '청동 방울'], ['🗿', '고인돌'], ['🏹', '명궁'],
+    ['👑', '금관'], ['🏯', '산성 지킴이'], ['📜', '두루마리'], ['🪷', '연꽃 무늬'], ['🛕', '석탑'],
+    ['🖌️', '명필'], ['📖', '직지'], ['🧭', '길잡이'], ['⛵', '바닷길'], ['🐢', '거북선'],
+    ['☔', '측우기'], ['🗺️', '대동여지도'], ['🕊️', '만세 운동'], ['🏛️', '독립문'], ['🏆', '역사 박사']
+  ];
+  const TIER = { 3: '금빛', 2: '은빛', 1: '구릿빛' };
+  const CONFETTI = ['#ddb66c', '#f2d48c', '#2f7a55', '#224f42', '#9cc9ad', '#c9a352'];
+  let lastCelebration = null, audioCtx = null;
+  const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  function chime() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      audioCtx = audioCtx || new AC();
+      const t = audioCtx.currentTime;
+      [523.25, 659.25, 783.99].forEach((f, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.frequency.value = f; o.type = 'triangle';
+        g.gain.setValueAtTime(0.0001, t + i * 0.12); g.gain.exponentialRampToValueAtTime(0.18, t + i * 0.12 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.35);
+        o.connect(g); g.connect(audioCtx.destination); o.start(t + i * 0.12); o.stop(t + i * 0.12 + 0.4);
+      });
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function celebration(stars, improved) {
+    const prefs = fxPrefs.load(), quiet = reducedMotion();
+    const [ic, name] = STAGE_BADGE[G.stage] || STAGE_BADGE[0];
+    const topicName = G.topic === 'all' ? '전체 시대' : ERA_NAME[G.topic];
+    const nextLv = LEVELS[G.L + 1] || null;
+    const levelEnd = G.stage === STAGES - 1;
+    let doneN = 0;
+    for (let i = 0; i < STAGES; i++) if (DB.rec[recKey(G.L, G.topic, i)]) doneN++;
+    const pieces = !quiet && prefs.confetti ? 24 : 0;
+    const confetti = pieces ? `<div class="cw-confetti" aria-hidden="true">${Array.from({ length: pieces }, (_, i) =>
+      `<i style="left:${(i * 37) % 100}%;background:${CONFETTI[(i + G.stage) % CONFETTI.length]};animation-delay:${(i % 8) * 0.07}s"></i>`).join('')}</div>` : '';
+    const level = levelEnd ? `<div class="cw-level">
+        <b>${esc(G.lv.name)} 단계 20번째 낱말풀이까지 마쳤어요!</b>
+        <p>${esc(topicName)}에서 완성한 낱말풀이 ${doneN}/${STAGES}개 · 별 ${levelStars(G.L, G.topic)}/${STAGES * 3}${doneN === STAGES ? ' · 모두 완성!' : ''}</p>
+        ${nextLv ? `<button class="btn gold" id="goNextLevel">다음 단계 ‘${esc(nextLv.name)}’ 1번 풀기 →</button>` : '<p>마지막 단계 마스터까지 왔어요. 진짜 역사 박사!</p>'}
+      </div>` : '';
+    const html = `<div class="cw-cele ${quiet ? 'cw-quiet' : ''} cw-tier${stars}" style="--cw-hue:${(G.stage * 18) % 360}" role="status">
+        ${confetti}
+        <span class="cw-emblem" aria-hidden="true">${ic}</span>
+        <div><small>${esc(G.lv.name)} · ${esc(topicName)} · ${G.stage + 1}번 완성</small>
+          <b>${TIER[stars]} ‘${esc(name)}’ 배지${improved ? '' : ' (이전 기록 유지)'}</b>
+          <span class="cw-stars" aria-label="별 ${stars}개">${starStr(stars)}</span></div>
+      </div>${level}
+      <div class="cw-fx"><label><input type="checkbox" data-fx="confetti" ${prefs.confetti ? 'checked' : ''}> 축하 색종이</label>
+        <label><input type="checkbox" data-fx="sound" ${prefs.sound ? 'checked' : ''}> 축하 소리</label></div>`;
+    const sound = prefs.sound ? chime() : false; // 확인·찬스 버튼을 누른 직후에만 불리므로 자동 재생이 아님
+    lastCelebration = { L: G.L, topic: G.topic, stage: G.stage, stars, badge: name, quiet, confetti: pieces, sound,
+      levelEnd, nextLevel: levelEnd && nextLv ? nextLv.id : null };
+    const topic = G.topic;
+    return {
+      html,
+      wire() {
+        const nl = $('#goNextLevel');
+        if (nl) nl.onclick = () => { closeModal(); location.hash = `#play/${nextLv.id}/${topic}/1`; };
+        $('#mbox').querySelectorAll('[data-fx]').forEach(el => el.addEventListener('change', () => {
+          const p = fxPrefs.load(); p[el.dataset.fx] = el.checked; fxPrefs.save(p);
+          if (el.dataset.fx === 'sound' && el.checked) chime();
+        }));
+        const first = $('#goNext') || nl || $('#goAgain');
+        if (first) first.focus();
+      }
+    };
   }
 
   // 판 클릭
@@ -947,7 +1045,9 @@
   $('#printKey').addEventListener('click', () => printSheet(true));
 
   // ---------- 주소(해시)로 화면 전환 ----------
+  let booted = false;
   function route() {
+    if (!booted) return; // 학생 계정 확인 전에는 판을 그리지 않음
     saveProgress(); // 다른 판·홈으로 가기 전 풀던 판 저장
     const m =location.hash.match(/^#play\/(\w+)\/(\w+)\/(\d+)$/);
     if (m) {
@@ -968,10 +1068,56 @@
     renderHome();
   }
   window.addEventListener('hashchange', route);
-  route();
+
+  // 지금 학생 칸(없으면 이 기기 공용 칸)의 기록을 읽고 첫 화면을 그림
+  function boot() {
+    applyScope();
+    DB = store.load();
+    DB.rec = DB.rec || {};
+    UI.topic = DB.topic || 'all';
+    UI.L = DB.L != null ? DB.L : 0;
+    if (UI.topic !== 'all' && !ERA_NAME[UI.topic]) UI.topic = 'all';
+    if (!LEVELS[UI.L]) UI.L = 0;
+    booted = true;
+    document.body.classList.remove('cw-wait');
+    route();
+  }
+  // account.js 가 부르는 연결 고리. 로그인 실패·연결 오류가 판 풀이 흐름을 멈추지 않게, 계정 쪽은 저장 칸만 알려 줘요.
+  const host = {
+    // 풀던 판을 지금 칸(이 기기)에 저장 — 서버 저장은 하지 않음
+    flushLocal() { if (booted) saveProgress(); },
+    // 학생을 바꾸기 전: 저장 후 화면을 비워 앞 학생 기록이 남지 않게
+    hold() {
+      if (!booted) return;
+      saveProgress();
+      clearInterval(timer);
+      G = null;
+      closeModal();
+      document.body.classList.remove('playing');
+      document.body.classList.add('cw-wait');
+      booted = false;
+      if (/^#play\//.test(location.hash)) location.hash = ''; // 새 학생은 단계 고르기 화면에서 시작
+    },
+    switched() { boot(); },
+    // 서버와 합친 기록을 다시 읽음. 고른 판이 지금 푸는 판이면 그 풀이로 다시 엶
+    refresh(info) {
+      if (!booted) return;
+      DB.rec = store.load().rec || {};
+      const cur = G && !G.done ? recKey(G.L, G.topic, G.stage) : null;
+      if (cur && info && info.reload && (info.keys || []).includes(cur)) { startGame(G.L, G.topic, G.stage); return; }
+      if (!document.body.classList.contains('playing')) renderHome();
+    }
+  };
+  if (ACC && ACC.ready && typeof ACC.ready.then === 'function') {
+    ACC.attach(host);
+    const go = () => { boot(); ACC.booted(); };
+    ACC.ready.then(go, go);
+  } else boot();
 
   // 테스트·확인용
-  window.JAMS_CROSSWORD = { WORDS, LEVELS, ERAS, getSet, getPools, puzzleSig, restoreState, PROGRESS_KEY: PKEY,
+  window.JAMS_CROSSWORD = { WORDS, LEVELS, ERAS, getSet, getPools, puzzleSig, restoreState,
+    get PROGRESS_KEY() { return PKEY; }, get RECORD_KEY() { return SKEY; },
+    celebration: () => lastCelebration && Object.assign({}, lastCelebration),
     current: () => G && { L: G.L, topic: G.topic, stage: G.stage, sel: G.sel, solved: [...G.solved], given: [...G.given],
       used: Object.assign({}, G.used), items: Object.assign({}, G.items), misses: G.misses, penalty: G.penalty, sec: G.sec, done: G.done } };
 })();
