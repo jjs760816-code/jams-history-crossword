@@ -66,3 +66,8 @@ body.cw-wait main{display:none}
   .cw-cele b{font-size:15px}
   .cw-form .btn{flex:1}
 }
+
+/* 내 기록(통합): 아이디 바로 아래 */
+.cw-profile{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;margin:6px 0;padding:6px 10px;border-left:4px solid #39775e;border-radius:8px;background:rgba(255,255,255,.7);font-size:13px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.cw-profile-title{font-weight:700;color:#2b604b}
+.cw-profile-parts,.cw-profile-next{font-size:12px;opacity:.85}
