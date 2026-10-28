@@ -50,7 +50,9 @@
   // ---------- 상태 ----------
   // mode: checking | unavailable(계정 API 없는 복사본) | offline(계정 확인 실패) | guest | reset | account
   const S = { mode: 'checking', ref: null, username: '', meta: null, sync: 'idle', note: '', inflight: null,
-    timer: null, retryT: null, backoff: 0, lastSent: 0, blocked: null, loginLost: false, confirmLogout: false, app: null, booted: false };
+    timer: null, retryT: null, backoff: 0, lastSent: 0, blocked: null, loginLost: false, confirmLogout: false, app: null, booted: false, profile: null };
+  // 내 기록(순위·레벨·누적 경험치)은 서버가 확인한 응답의 profile 만 쓴다. 이 기기에만 있는 기록으로 새 순위를 만들지 않는다.
+  const setProfile = p => { if (plain(p) && plain(p.scopes) && plain(p.scopes.combined)) S.profile = p; };
 
   const newMeta = () => ({ v: 1, rev: 0, baseAt: {}, tomb: {}, dirty: false, pending: null, conflicts: {}, importDone: false, savedAt: 0 });
   function loadMeta(ref) {
@@ -206,7 +208,7 @@
     }
     if (status === 200 && j.ok && j.ref === ref) {
       meta.pending = null; meta.rev = j.revision; meta.baseAt = p.baseAt; meta.savedAt = Date.now();
-      if (here) S.backoff = 0;
+      if (here) { S.backoff = 0; setProfile(j.profile); }
       if (j.data) { // 서버가 합친 더 좋은 완성 기록을 이 기기에도 반영
         const merged = mergeDocs({ rec: recDoc(ref).rec, progress: {}, tomb: {}, baseAt: {}, dirty: true }, { rec: j.data.rec }).rec;
         writeRec(ref, merged);
@@ -270,6 +272,7 @@
     if (r.status === 403) { S.mode = 'reset'; S.note = r.json && r.json.message || ''; return; }
     if (r.status !== 200 || !r.json || r.json.ref !== ref) { setSync('error', '서버 저장을 확인하지 못했어요.'); return; }
     absorb(ref, meta, r.json);
+    setProfile(r.json.profile);
     saveMeta(ref, meta);
     if (S.app) S.app.refresh({ keys: Object.keys(meta.conflicts) });
     if (Object.keys(meta.conflicts).length) setSync('conflict');
@@ -294,7 +297,7 @@
     else if (r.status === 200 && r.json && plain(r.json.account)) {
       const ref = r.json.player && r.json.player.ref;
       if (r.json.account.resetRequired) { S.mode = 'reset'; S.username = String(r.json.account.username || ''); }
-      else if (typeof ref === 'string' && REF.test(ref)) await enter(ref, String(r.json.account.username || ''));
+      else if (typeof ref === 'string' && REF.test(ref)) await enter(ref, String(r.json.account.username || ''), r.json.profile);
       else S.mode = 'offline';
     } else S.mode = 'offline';
     return done();
@@ -304,8 +307,9 @@
     if (S.app && S.booted) S.app.switched();
     return { scope: S.mode === 'account' ? S.ref : null };
   }
-  async function enter(ref, username) {
+  async function enter(ref, username, profile) {
     S.ref = ref; S.username = username; S.meta = loadMeta(ref); S.mode = 'account'; S.loginLost = false; S.blocked = null; S.backoff = 0;
+    S.profile = null; setProfile(profile);
     setSync(S.meta.pending || S.meta.dirty ? 'pending' : 'idle');
     // ① 응답을 잃었을 수 있는 보관 요청을 같은 번호로 먼저 다시 보냄 ② 서버 저장을 받아 이 계정의 남은 변경과 합침
     if (S.meta.pending) await flush();
@@ -313,7 +317,7 @@
   }
   function leave() {
     clearTimeout(S.timer); clearTimeout(S.retryT); S.timer = S.retryT = null;
-    S.ref = null; S.meta = null; S.username = ''; S.sync = 'idle'; S.note = ''; S.blocked = null; S.loginLost = false; S.confirmLogout = false;
+    S.ref = null; S.meta = null; S.username = ''; S.profile = null; S.sync = 'idle'; S.note = ''; S.blocked = null; S.loginLost = false; S.confirmLogout = false;
   }
 
   async function login(kind, username, password) {
@@ -446,6 +450,7 @@
     else if (S.mode === 'account') {
       const m = S.meta, text = SYNC_TEXT[S.sync] || '';
       h = `<div class="cw-who"><span class="cw-badge">학생</span><b>${esc(S.username)}</b><span class="cw-sync cw-${S.sync}" role="status">${esc(text)}${S.sync === 'saved' && m.savedAt ? ` (${hhmm(m.savedAt)})` : ''}</span></div>`;
+      h += profileHtml(S.profile);
       if (S.note) h += `<p class="cw-small">${esc(S.note)}</p>`;
       if (S.loginLost) h += loginForm(`같은 아이디(<b>${esc(S.username)}</b>)로 다시 로그인하면 보관한 풀이를 저장해요.`);
       else if (S.sync === 'reset') h += '<div class="cw-row"><a class="btn" href="/play.html">비밀번호 바꾸러 가기</a></div>';
@@ -466,6 +471,18 @@
     if (memoryOnly) h += '<p class="cw-warn" role="alert">이 브라우저에서 기기 저장을 사용할 수 없어요. 서버에 저장됐다는 표시를 확인하기 전에는 창을 닫지 마세요. 연결이 끊기면 현재 창에만 임시 보관돼요.</p>';
     if (S.mode !== 'account' && S.note) h += `<p class="cw-small" role="alert">${esc(S.note)}</p>`;
     box.innerHTML = h;
+  }
+  // 서버가 확인한 마지막 내 기록(통합). 저장 중·실패 때는 앞서 확인한 값을 그대로 둔다.
+  function profileHtml(p) {
+    const n = v => (Number.isSafeInteger(v) && v >= 0 ? v : null);
+    const c = p && p.scopes && p.scopes.combined;
+    if (!c || n(c.xp) === null || n(c.level) === null) return '<p class="cw-profile cw-small">내 기록(순위·레벨)을 아직 불러오지 못했어요.</p>';
+    const rank = p.ranked && n(c.rank) !== null && n(c.participants) !== null ? `내 순위 ${n(c.rank)}위 / ${n(c.participants)}명` : '체험 · 순위 제외';
+    const e = n(p.scopes.exploration && p.scopes.exploration.xp), w = n(p.scopes.crossword && p.scopes.crossword.xp);
+    return `<div class="cw-profile" role="group" aria-label="내 기록 통합"><span class="cw-profile-title">통합 기록</span>
+      <b class="cw-profile-main">${esc(rank)} · Lv.${n(c.level)} · 총 경험치 ${n(c.xp)} XP</b>
+      ${e !== null && w !== null ? `<span class="cw-profile-parts">탐험 ${e} XP + 낱말풀이 ${w} XP</span>` : ''}
+      ${n(c.remainingXp) !== null ? `<span class="cw-profile-next">다음 레벨까지 ${n(c.remainingXp)} XP</span>` : ''}</div>`;
   }
   function label(k) {
     const LV = { intro: '입문', basic: '초급', mid: '중급', adv: '상급', high: '고급', master: '마스터' };
