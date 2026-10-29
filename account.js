@@ -50,7 +50,7 @@
   // ---------- 상태 ----------
   // mode: checking | unavailable(계정 API 없는 복사본) | offline(계정 확인 실패) | guest | reset | account
   const S = { mode: 'checking', ref: null, username: '', meta: null, sync: 'idle', note: '', inflight: null,
-    timer: null, retryT: null, backoff: 0, lastSent: 0, blocked: null, loginLost: false, confirmLogout: false, app: null, booted: false, profile: null };
+    timer: null, retryT: null, backoff: 0, lastSent: 0, blocked: null, loginLost: false, confirmLogout: false, app: null, booted: false, profile: null, role: '', previewActive: false, switching: false };
   // 내 기록(순위·레벨·누적 경험치)은 서버가 확인한 응답의 profile 만 쓴다. 이 기기에만 있는 기록으로 새 순위를 만들지 않는다.
   const setProfile = p => { if (plain(p) && plain(p.scopes) && plain(p.scopes.combined)) S.profile = p; };
 
@@ -297,13 +297,18 @@
     else if (r.status === 200 && r.json && plain(r.json.account)) {
       const ref = r.json.player && r.json.player.ref;
       if (r.json.account.resetRequired) { S.mode = 'reset'; S.username = String(r.json.account.username || ''); }
-      else if (typeof ref === 'string' && REF.test(ref)) await enter(ref, String(r.json.account.username || ''), r.json.profile);
+      else if (typeof ref === 'string' && REF.test(ref)) {
+        S.role=r.json.account.role==='admin'?'admin':'student';
+        if(S.role==='student'){try{const info=await req('GET','/api/auth/preview-status');S.previewActive=!!(info&&info.status===200&&info.json&&info.json.active);}catch(e){S.previewActive=false;}}
+        await enter(ref, String(r.json.account.username || ''), r.json.profile);
+      }
       else S.mode = 'offline';
     } else S.mode = 'offline';
     return done();
   }
   function done() {
     render();
+    if(typeof CustomEvent==='function')window.dispatchEvent(new CustomEvent('jams:session-changed'));
     if (S.app && S.booted) S.app.switched();
     return { scope: S.mode === 'account' ? S.ref : null };
   }
@@ -317,7 +322,7 @@
   }
   function leave() {
     clearTimeout(S.timer); clearTimeout(S.retryT); S.timer = S.retryT = null;
-    S.ref = null; S.meta = null; S.username = ''; S.profile = null; S.sync = 'idle'; S.note = ''; S.blocked = null; S.loginLost = false; S.confirmLogout = false;
+    S.ref = null; S.meta = null; S.username = ''; S.profile = null; S.role = ''; S.previewActive = false; S.sync = 'idle'; S.note = ''; S.blocked = null; S.loginLost = false; S.confirmLogout = false;
   }
 
   async function login(kind, username, password) {
@@ -328,6 +333,32 @@
     if (r.status !== 200 && r.status !== 201) return { ok: false, message: (r.json && r.json.message) || '로그인하지 못했어요.' };
     await identify();
     return { ok: true };
+  }
+
+  // 역할을 바꾸거나 관리자 화면으로 이동하기 전에 이 계정의 기록을 서버에서 확인한다.
+  async function prepareNavigation() {
+    if (S.mode !== 'account') return true;
+    const ref=S.ref;
+    if(S.app&&S.booted)S.app.flushLocal();
+    clearTimeout(S.timer);S.timer=null;
+    if(S.inflight)await S.inflight.catch(()=>{});
+    await flush({manual:true});
+    if(S.meta&&S.meta.dirty&&!S.meta.pending&&!S.blocked)await flush({manual:true});
+    const ok=S.mode==='account'&&S.ref===ref&&!S.loginLost&&S.meta&&!S.meta.pending&&!S.meta.dirty&&!Object.keys(S.meta.conflicts).length;
+    if(!ok){S.note='아직 저장을 확인하지 못했어요. 연결을 확인하고 지금 저장을 누른 뒤 다시 전환해 주세요.';render();}
+    return !!ok;
+  }
+  async function switchVirtual() {
+    if(S.switching||!(S.role==='admin'||S.previewActive))return;
+    S.switching=true;render();
+    try{
+      if(!await prepareNavigation())return;
+      const path=S.role==='admin'?'/api/admin/preview-start':'/api/auth/preview-return';
+      const r=await req('POST',path,'{}');
+      if(!r||r.status!==200||!r.json||!r.json.ok){S.note=(r&&r.json&&r.json.message)||'전환 결과를 확인하지 못했어요. 현재 계정을 다시 확인해 주세요.';render();return;}
+      await identify();
+    }catch(e){S.note='전환을 확인하지 못했어요. 연결을 확인한 뒤 계정 다시 확인을 눌러 주세요.';render();}
+    finally{S.switching=false;render();}
   }
 
   async function logout(force) {
@@ -449,8 +480,9 @@
       (otherPending() ? '<p class="cw-small">이 기기에 아직 서버에 저장하지 못한 학생 풀이가 보관돼 있어요. 그 학생이 다시 로그인하면 저장돼요.</p>' : '');
     else if (S.mode === 'account') {
       const m = S.meta, text = SYNC_TEXT[S.sync] || '';
-      h = `<div class="cw-who"><span class="cw-badge">학생</span><b>${esc(S.username)}</b><span class="cw-sync cw-${S.sync}" role="status">${esc(text)}${S.sync === 'saved' && m.savedAt ? ` (${hhmm(m.savedAt)})` : ''}</span></div>`;
+      h = `<div class="cw-who"><span class="cw-badge">${S.role==='admin'?'교사 관리자':S.previewActive?'교사 가상 학생':'학생'}</span><b>${esc(S.username)}</b><span class="cw-sync cw-${S.sync}" role="status">${esc(text)}${S.sync === 'saved' && m.savedAt ? ` (${hhmm(m.savedAt)})` : ''}</span></div>`;
       h += profileHtml(S.profile);
+      if(S.role==='admin'||S.previewActive)h+=`<div class="cw-row"><button class="btn gold" data-act="switch-virtual" ${S.switching?'disabled':''}>${S.switching?'저장·전환 중…':S.role==='admin'?'가상 학생으로 전환':'관리자로 돌아가기'}</button><a class="btn ghost" href="/admin.html?return_to=%2Fcrossword%2Findex.html" data-act="admin-hub">교사 관리자</a><button class="btn ghost" data-act="recheck" ${S.switching?'disabled':''}>계정 다시 확인</button></div><p class="cw-small">교사 전용 가상 학생의 기록은 따로 저장되고 학생 순위에는 포함되지 않아요.</p>`;
       if (S.note) h += `<p class="cw-small">${esc(S.note)}</p>`;
       if (S.loginLost) h += loginForm(`같은 아이디(<b>${esc(S.username)}</b>)로 다시 로그인하면 보관한 풀이를 저장해요.`);
       else if (S.sync === 'reset') h += '<div class="cw-row"><a class="btn" href="/play.html">비밀번호 바꾸러 가기</a></div>';
@@ -501,6 +533,9 @@
       const b = e.target.closest('[data-act]');
       if (!b) return;
       const act = b.dataset.act;
+      if(act==='admin-hub'){e.preventDefault();prepareNavigation().then(ok=>{if(ok)location.href='/admin.html?return_to=%2Fcrossword%2Findex.html'});return;}
+      if(act==='switch-virtual'){switchVirtual();return;}
+      if(S.switching)return;
       if (act === 'login' || act === 'register') { lastAct = act; return; } // 제출은 submit 에서
       if (act === 'recheck') identify();
       if (act === 'logout') logout(false);
@@ -540,7 +575,7 @@
     ready: null,
     attach(app) { S.app = app; },
     booted() { S.booted = true; },
-    keys, changed, flush, login, logout, identify, importGuest, dismissImport, resolve,
+    keys, changed, flush, login, logout, identify, importGuest, dismissImport, resolve, prepareNavigation, switchVirtual,
     label: () => (S.mode === 'account' ? S.username : null),
     state: () => ({ mode: S.mode, ref: S.ref, username: S.username, sync: S.sync, loginLost: S.loginLost, memoryOnly,
       meta: S.meta && JSON.parse(JSON.stringify(S.meta)) }),
