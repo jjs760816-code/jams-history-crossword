@@ -479,10 +479,12 @@
     if (!c || n(c.xp) === null || n(c.level) === null) return '<p class="cw-profile cw-small">내 기록(순위·레벨)을 아직 불러오지 못했어요.</p>';
     const rank = p.ranked && n(c.rank) !== null && n(c.participants) !== null ? `내 순위 ${n(c.rank)}위 / ${n(c.participants)}명` : '체험 · 순위 제외';
     const e = n(p.scopes.exploration && p.scopes.exploration.xp), w = n(p.scopes.crossword && p.scopes.crossword.xp);
-    return `<div class="cw-profile" role="group" aria-label="내 기록 통합"><span class="cw-profile-title">통합 기록</span>
+    const leaders=Array.isArray(p.leaders)?p.leaders.slice(0,5).filter(x=>plain(x)&&typeof x.username==='string'&&x.username.length<=40&&n(x.rank)!==null&&x.rank>0):[];
+    const top=Array.from({length:5},(_,i)=>{const x=leaders[i];return `<li><b>${x?n(x.rank):i+1}위</b> <span>${x?esc(x.username):'—'}</span></li>`}).join('');
+    return `<div class="cw-profile-row"><div class="cw-profile" role="group" aria-label="내 기록 통합"><span class="cw-profile-title">통합 기록</span>
       <b class="cw-profile-main">${esc(rank)} · Lv.${n(c.level)} · 총 경험치 ${n(c.xp)} XP</b>
       ${e !== null && w !== null ? `<span class="cw-profile-parts">탐험 ${e} XP + 낱말풀이 ${w} XP</span>` : ''}
-      ${n(c.remainingXp) !== null ? `<span class="cw-profile-next">다음 레벨까지 ${n(c.remainingXp)} XP</span>` : ''}</div>`;
+      ${n(c.remainingXp) !== null ? `<span class="cw-profile-next">다음 레벨까지 ${n(c.remainingXp)} XP</span>` : ''}</div><aside class="cw-leaders" aria-label="현재 총경험치 상위 5명"><span>현재 TOP 5</span><ol>${top}</ol><small>총경험치 기준 · 동점은 공동 순위</small></aside></div>`;
   }
   function label(k) {
     const LV = { intro: '입문', basic: '초급', mid: '중급', adv: '상급', high: '고급', master: '마스터' };
