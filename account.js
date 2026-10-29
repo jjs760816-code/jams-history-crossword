@@ -482,7 +482,7 @@
       const m = S.meta, text = SYNC_TEXT[S.sync] || '';
       h = `<div class="cw-who"><span class="cw-badge">${S.role==='admin'?'교사 관리자':S.previewActive?'교사 가상 학생':'학생'}</span><b>${esc(S.username)}</b><span class="cw-sync cw-${S.sync}" role="status">${esc(text)}${S.sync === 'saved' && m.savedAt ? ` (${hhmm(m.savedAt)})` : ''}</span></div>`;
       h += profileHtml(S.profile);
-      if(S.role==='admin'||S.previewActive)h+=`<div class="cw-row"><button class="btn gold" data-act="switch-virtual" ${S.switching?'disabled':''}>${S.switching?'저장·전환 중…':S.role==='admin'?'가상 학생으로 전환':'관리자로 돌아가기'}</button><a class="btn ghost" href="/admin.html?return_to=%2Fcrossword%2Findex.html" data-act="admin-hub">교사 관리자</a><button class="btn ghost" data-act="recheck" ${S.switching?'disabled':''}>계정 다시 확인</button></div><p class="cw-small">교사 전용 가상 학생의 기록은 따로 저장되고 학생 순위에는 포함되지 않아요.</p>`;
+
       if (S.note) h += `<p class="cw-small">${esc(S.note)}</p>`;
       if (S.loginLost) h += loginForm(`같은 아이디(<b>${esc(S.username)}</b>)로 다시 로그인하면 보관한 풀이를 저장해요.`);
       else if (S.sync === 'reset') h += '<div class="cw-row"><a class="btn" href="/play.html">비밀번호 바꾸러 가기</a></div>';
@@ -498,7 +498,10 @@
         <div class="cw-row"><button class="btn gold" data-act="import">이 기기의 이전 풀이 가져오기</button><button class="btn ghost" data-act="no-import">가져오지 않기</button></div></div>`;
       if (S.confirmLogout) h += `<div class="cw-warn" role="alert"><p>아직 서버에 저장하지 못한 풀이가 있어요. 로그아웃해도 이 기기의 <b>${esc(S.username)}</b> 칸에 보관했다가, 같은 학생이 다시 로그인하면 저장해요. 다른 학생에게는 보이지 않아요.</p>
         <div class="cw-row"><button class="btn" data-act="save-now">지금 저장하기</button><button class="btn ghost" data-act="logout-force">그래도 로그아웃</button><button class="btn ghost" data-act="logout-cancel">취소</button></div></div>`;
-      else h += `<div class="cw-row"><button class="btn ghost" data-act="save-now">지금 저장</button><button class="btn ghost" data-act="logout">로그아웃 (다른 학생으로 로그인)</button></div>`;
+      else {
+        const roleTools=(S.role==='admin'||S.previewActive)?`<button class="btn gold" data-act="switch-virtual" title="교사 전용 가상 학생의 기록은 따로 저장되고 학생 순위에는 포함되지 않아요." ${S.switching?'disabled':''}>${S.switching?'저장·전환 중…':S.role==='admin'?'가상 학생으로 전환':'관리자로 돌아가기'}</button><a class="btn ghost" href="/admin.html?return_to=%2Fcrossword%2Findex.html" data-act="admin-hub">교사 관리자</a><button class="btn ghost" data-act="recheck" ${S.switching?'disabled':''}>계정 다시 확인</button>`:'';
+        h+=`<div class="cw-row cw-account-tools" role="group" aria-label="계정 메뉴">${roleTools}<button class="btn ghost" data-act="save-now">지금 저장</button><button class="btn ghost" data-act="logout" title="다른 학생으로 로그인">로그아웃</button></div>`;
+      }
     }
     if (memoryOnly) h += '<p class="cw-warn" role="alert">이 브라우저에서 기기 저장을 사용할 수 없어요. 서버에 저장됐다는 표시를 확인하기 전에는 창을 닫지 마세요. 연결이 끊기면 현재 창에만 임시 보관돼요.</p>';
     if (S.mode !== 'account' && S.note) h += `<p class="cw-small" role="alert">${esc(S.note)}</p>`;
